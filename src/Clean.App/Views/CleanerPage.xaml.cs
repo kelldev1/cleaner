@@ -17,6 +17,13 @@ public sealed partial class CleanerPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        ViewModel.ConfirmAsync = confirmation => ConfirmationDialog.ShowAsync(this, confirmation);
         await ViewModel.EnsureDisksLoadedAsync();
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        ViewModel.ConfirmAsync = null;
     }
 }
