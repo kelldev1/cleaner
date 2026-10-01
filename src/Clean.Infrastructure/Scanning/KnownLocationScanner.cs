@@ -8,6 +8,7 @@ namespace Clean.Infrastructure.Scanning;
 // Read-only: measures the folders named by the rules on one drive and reports what a cleanup would remove.
 public sealed class KnownLocationScanner(
     IReadOnlyList<CleaningRule> rules,
+    IReparsePointDetector reparsePointDetector,
     TimeProvider clock,
     ILogger<KnownLocationScanner> logger) : IScanner
 {
@@ -37,8 +38,8 @@ public sealed class KnownLocationScanner(
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var folder = Resolve(rawPath);
-                if (folder is null || !IsOnDrive(folder, driveRoot) || !visited.Add(Path.TrimEndingDirectorySeparator(folder.FullName)))
+                var folder = RuleFolders.Resolve(rawPath, driveRoot, reparsePointDetector, logger);
+                if (folder is null || !visited.Add(Path.TrimEndingDirectorySeparator(folder.FullName)))
                 {
                     continue;
                 }
@@ -53,29 +54,6 @@ public sealed class KnownLocationScanner(
 
         tracker.Report();
         return items;
-    }
-
-    private static bool IsOnDrive(DirectoryInfo folder, string driveRoot) =>
-        string.Equals(Path.TrimEndingDirectorySeparator(folder.Root.FullName), Path.TrimEndingDirectorySeparator(driveRoot), StringComparison.OrdinalIgnoreCase);
-
-    private DirectoryInfo? Resolve(string rawPath)
-    {
-        var expanded = Environment.ExpandEnvironmentVariables(rawPath);
-        if (expanded.Contains('%') || !Directory.Exists(expanded))
-        {
-            return null;
-        }
-
-        var folder = new DirectoryInfo(expanded);
-
-        // A rule folder that is itself a link could point anywhere, for example to the user's documents.
-        if (folder.Attributes.HasFlag(FileAttributes.ReparsePoint))
-        {
-            logger.LogWarning("Skipping {Folder}: it is a link to another location", folder.FullName);
-            return null;
-        }
-
-        return folder;
     }
 
     private ScanItem Measure(CleaningRule rule, DirectoryInfo folder, ScanProgressTracker tracker, CancellationToken cancellationToken)
